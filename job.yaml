@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: init-infradb
+spec:
+  ttlSecondsAfterFinished: 60
+  template:
+    metadata:
+      labels:
+        workload: job
+        app: go-infra
+        workload-type: db-migration
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: init-infradb
+          image: ghcr.io/babbage88/init-infradb:v1.0.9
+          imagePullPolicy: Always
+          command: ["/app/migrate"]
+          volumeMounts:
+            - name: initdb-env
+              mountPath: "/app/.env"
+              subPath: .env
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+      volumes:
+        - name: initdb-env
+          secret:
+            secretName: initdb.env
+      imagePullSecrets:
+        - name: ghcr

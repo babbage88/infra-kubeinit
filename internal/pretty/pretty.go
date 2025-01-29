@@ -1,6 +1,9 @@
 package pretty
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type PrettyPrintOption func(p *prettyPrinter)
 
@@ -11,6 +14,10 @@ type PrettyPrinter interface {
 	PrintWarningf(format string, a ...any)
 	PrintError(s string)
 	PrintErrorf(format string, a ...any)
+	PrettyPrintDateTime(time.Time)
+	PrettyPrintTime(time.Time)
+	PrettyPrintDate(time.Time)
+	DateTimeSting(time.Time) string
 }
 
 type prettyPrinter struct {
@@ -36,7 +43,6 @@ func WithErrColor(c int32) PrettyPrintOption {
 		p.ErrColor = c
 	}
 }
-
 func NewPrettyPrinter(opts ...PrettyPrintOption) *prettyPrinter {
 	const (
 		infoColor = int32(92)
@@ -82,6 +88,32 @@ func (p *prettyPrinter) PrintErrorf(format string, a ...any) {
 	p.PrintError(fstring)
 }
 
+func (p *prettyPrinter) PrettyPrintDateTime(t time.Time) {
+	dateTimeString := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
+		t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second())
+	p.Print(dateTimeString)
+}
+
+func (p *prettyPrinter) PrettyPrintDate(t time.Time) {
+	dateTimeString := fmt.Sprintf("%d-%02d-%02d",
+		t.Year(), t.Month(), t.Day())
+	p.Print(dateTimeString)
+}
+
+func (p *prettyPrinter) PrettyPrintTime(t time.Time) {
+	dateTimeString := fmt.Sprintf("%02d:%02d:%02d",
+		t.Hour(), t.Minute(), t.Second())
+	p.Print(dateTimeString)
+}
+
+func (p *prettyPrinter) DateTimeSting(t time.Time) string {
+	dateTimeString := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
+		t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second())
+	return dateTimeString
+}
+
 func Print(s ...any) {
 	const (
 		infoColor = int32(92)
@@ -125,4 +157,30 @@ func PrintErrorf(format string, a ...any) {
 	)
 	fstring := fmt.Sprintf(format, a)
 	fmt.Printf("\x1b[1;%dm%s\x1b[0m\n", errColor, fstring)
+}
+
+func PrettyPrintDateTime(t time.Time) {
+	dateTimeString := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
+		t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second())
+	Print(dateTimeString)
+}
+
+func PrettyPrintDate(t time.Time) {
+	dateTimeString := fmt.Sprintf("%d-%02d-%02d",
+		t.Year(), t.Month(), t.Day())
+	Print(dateTimeString)
+}
+
+func PrettyPrintTime(t time.Time) {
+	dateTimeString := fmt.Sprintf("%02d:%02d:%02d",
+		t.Hour(), t.Minute(), t.Second())
+	Print(dateTimeString)
+}
+
+func DateTimeSting(t time.Time) string {
+	dateTimeString := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
+		t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second())
+	return dateTimeString
 }
