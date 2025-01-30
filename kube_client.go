@@ -2,16 +2,15 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"log/slog"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/babbage88/infra-kubeinit/internal/pretty"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -154,37 +153,76 @@ func (k *KubeClient) GetBatchJobByLabel(namespace string, label string) (*batchv
 	return job, err
 }
 
-func (k *KubeClient) LaunchBatchJob(namespace *string, jobName *string, image *string, cmd *string) {
-	jobs := k.Client.BatchV1().Jobs(*namespace)
-	var backOffLimit int32 = 0
-
-	jobSpec := &batchv1.Job{
+// createJob creates a Kubernetes Job using client-go
+func (k *KubeClient) CreateJob(jobName string, namespace string, imageName string, volName string, secretName string, ttl *int32) error {
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      *jobName,
-			Namespace: *namespace,
+			Name: jobName,
 		},
 		Spec: batchv1.JobSpec{
-			Template: v1.PodTemplateSpec{
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
+			TTLSecondsAfterFinished: ttl,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"workload":      "job",
+						"app":           "go-infra",
+						"workload-type": "db-migration",
+					},
+				},
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
 						{
-							Name:    *jobName,
-							Image:   *image,
-							Command: strings.Split(*cmd, " "),
+							Name:            jobName,
+							Image:           imageName,
+							ImagePullPolicy: corev1.PullAlways,
+							Command:         []string{"/app/migrate"},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      volName,
+									MountPath: "/app/.env",
+									SubPath:   ".env",
+								},
+							},
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceMemory: resource.MustParse("512Mi"),
+									corev1.ResourceCPU:    resource.MustParse("500m"),
+								},
+								Requests: corev1.ResourceList{
+									corev1.ResourceMemory: resource.MustParse("256Mi"),
+									corev1.ResourceCPU:    resource.MustParse("250m"),
+								},
+							},
 						},
 					},
-					RestartPolicy: v1.RestartPolicyNever,
+					Volumes: []corev1.Volume{
+						{
+							Name: volName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: secretName,
+								},
+							},
+						},
+					},
+					ImagePullSecrets: []corev1.LocalObjectReference{
+						{Name: "ghcr"},
+					},
 				},
 			},
-			BackoffLimit: &backOffLimit,
 		},
 	}
 
-	_, err := jobs.Create(context.TODO(), jobSpec, metav1.CreateOptions{})
+	// Create the Job
+	jobsClient := k.Client.BatchV1().Jobs(namespace)
+	_, err := jobsClient.Create(context.TODO(), job, metav1.CreateOptions{})
 	if err != nil {
-		log.Fatalln("Failed to create K8s job.")
+		slog.Error("failed to create job", slog.String("error", err.Error()))
+		return fmt.Errorf("Error creating job %w", err)
 	}
 
-	// print job details
-	slog.Info("Job created successfully")
+	pretty.Printf("Job created successfully %s", job.Name)
+	slog.Info("Job created successfully\n", slog.String("name", job.Name))
+	return nil
 }
