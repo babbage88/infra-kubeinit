@@ -7,6 +7,10 @@ import (
 	"github.com/babbage88/infra-kubeinit/internal/pretty"
 )
 
+func int32Ptr(i int32) *int32 {
+	return &i
+}
+
 func main() {
 	pretty.Print("Starting main")
 	kubeClient := NewKubeClient()
@@ -18,7 +22,10 @@ func main() {
 	}
 	jobListLength := len(jobsList.Items)
 	if jobListLength < 1 {
-		pretty.PrintError("No successful migration jobs found.")
+		pretty.PrintWarning("No successful migration jobs found.")
+		pretty.Print("Creating Migration Job")
+		ttl := int32(120)
+		kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", int32Ptr(ttl))
 	}
 
 	fmt.Printf("Length of JobList: %d\n", jobListLength)

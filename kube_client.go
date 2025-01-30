@@ -154,7 +154,7 @@ func (k *KubeClient) GetBatchJobByLabel(namespace string, label string) (*batchv
 }
 
 // createJob creates a Kubernetes Job using client-go
-func (k *KubeClient) CreateJob(jobName string, namespace string, imageName string, volName string, secretName string, ttl *int32) error {
+func (k *KubeClient) CreateBatchJob(jobName string, namespace string, imageName string, volName string, secretName string, ttl *int32) error {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: jobName,
