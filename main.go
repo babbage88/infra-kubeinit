@@ -31,8 +31,6 @@ func getLatestSuccessfulJob(jobsList []batchv1.Job) *batchv1.Job {
 }
 
 func main() {
-	pretty.Print("Starting main")
-
 	// Initialize Kubernetes client
 	kubeClient := NewKubeClient()
 	kubeClient.InitializeExternalClient()
@@ -43,22 +41,12 @@ func main() {
 		pretty.PrintErrorf("Encountered Error: %s", err.Error())
 	}
 
-	jobListLength := len(jobsList.Items)
-	fmt.Printf("Number of migration jobs: %d\n", jobListLength)
-
-	if jobListLength < 1 {
-		pretty.PrintWarning("No successful migration jobs found.")
-		pretty.Print("Creating Migration Job")
-		ttl := int32(120)
-		kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", int32Ptr(ttl))
-		return
-	}
-
 	// Find the latest successful job
 	latestJob := getLatestSuccessfulJob(jobsList.Items)
 	if latestJob == nil {
 		pretty.PrintWarning("No successful migration jobs found.")
 		pretty.Print("Creating Migration Job")
+		fmt.Println()
 		ttl := int32(120)
 		kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", int32Ptr(ttl))
 		return
@@ -83,6 +71,7 @@ func main() {
 
 	// Debug output of job statuses
 	for _, j := range jobsList.Items {
+		fmt.Println()
 		response, err := json.MarshalIndent(j.Status, "", "  ")
 		if err != nil {
 			pretty.PrintErrorf("Error marshaling response: %s", err.Error())
