@@ -1,8 +1,11 @@
 package pretty
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
+
+	batchv1 "k8s.io/api/batch/v1"
 )
 
 type PrettyPrintOption func(p *prettyPrinter)
@@ -43,6 +46,7 @@ func WithErrColor(c int32) PrettyPrintOption {
 		p.ErrColor = c
 	}
 }
+
 func NewPrettyPrinter(opts ...PrettyPrintOption) *prettyPrinter {
 	const (
 		infoColor = int32(92)
@@ -66,7 +70,7 @@ func (p *prettyPrinter) Print(s ...any) {
 }
 
 func (p *prettyPrinter) Printf(format string, a ...any) {
-	fstring := fmt.Sprintf(format, a)
+	fstring := fmt.Sprintf(format, a...)
 	p.Print(fstring)
 }
 
@@ -75,7 +79,7 @@ func (p *prettyPrinter) PrintWarning(s ...any) {
 }
 
 func (p *prettyPrinter) PrintWarningf(format string, a ...any) {
-	fstring := fmt.Sprintf(format, a)
+	fstring := fmt.Sprintf(format, a...)
 	p.PrintWarning(fstring)
 }
 
@@ -84,7 +88,7 @@ func (p *prettyPrinter) PrintError(s ...any) {
 }
 
 func (p *prettyPrinter) PrintErrorf(format string, a ...any) {
-	fstring := fmt.Sprintf(format, a)
+	fstring := fmt.Sprintf(format, a...)
 	p.PrintError(fstring)
 }
 
@@ -114,6 +118,16 @@ func (p *prettyPrinter) DateTimeSting(t time.Time) string {
 	return dateTimeString
 }
 
+func (p *prettyPrinter) PrettyPrintJson(data []byte) {
+	Print("####### Json Data #######")
+	response, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		p.PrintErrorf("Error marshaling response: %s", err.Error())
+	}
+	p.Print(string(response))
+	fmt.Println()
+}
+
 func Print(s ...any) {
 	const (
 		infoColor = int32(92)
@@ -125,7 +139,7 @@ func Printf(format string, a ...any) {
 	const (
 		infoColor = int32(92)
 	)
-	fstring := fmt.Sprintf(format, a)
+	fstring := fmt.Sprintf(format, a...)
 	fmt.Printf("\x1b[1;%dm%s\x1b[0m\n", infoColor, fstring)
 }
 
@@ -140,7 +154,7 @@ func PrintWarningf(format string, a ...any) {
 	const (
 		warnColor = int32(93)
 	)
-	fstring := fmt.Sprintf(format, a)
+	fstring := fmt.Sprintf(format, a...)
 	fmt.Printf("\x1b[1;%dm%s\x1b[0m\n", warnColor, fstring)
 }
 
@@ -155,7 +169,7 @@ func PrintErrorf(format string, a ...any) {
 	const (
 		errColor = int32(91)
 	)
-	fstring := fmt.Sprintf(format, a)
+	fstring := fmt.Sprintf(format, a...)
 	fmt.Printf("\x1b[1;%dm%s\x1b[0m\n", errColor, fstring)
 }
 
@@ -183,4 +197,28 @@ func DateTimeSting(t time.Time) string {
 		t.Year(), t.Month(), t.Day(),
 		t.Hour(), t.Minute(), t.Second())
 	return dateTimeString
+}
+
+func PrettyPrintK8sJob(jobsList batchv1.JobList) {
+	// Debug output of job statuses
+	for _, j := range jobsList.Items {
+		fmt.Println()
+		response, err := json.MarshalIndent(j.Status, "", "  ")
+		if err != nil {
+			PrintErrorf("Error marshaling response: %s", err.Error())
+			continue
+		}
+		Print(string(response))
+		fmt.Println()
+	}
+}
+
+func PrettyPrintJson(data []byte) {
+	Print("####### Json Data #######")
+	response, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		PrintErrorf("Error marshaling response: %s", err.Error())
+	}
+	Print(string(response))
+	fmt.Println()
 }

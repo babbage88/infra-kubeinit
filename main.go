@@ -58,20 +58,20 @@ func (k *KubeClient) PrepDeployment() error {
 			if err != nil {
 				return fmt.Errorf("Error creating DB migration Job %w", err)
 			}
-			return nil
+			return err
 
 		} else {
 			pretty.Print("Last successful job is recent. No need to create a new job.")
-			return nil
+			return err
 		}
 	} else {
 		pretty.PrintWarning("Job status found, but CompletionTime is nil. Creating a new job.")
 		ttl := int32(120)
-		k.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", &ttl)
+		err := k.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", &ttl)
 		if err != nil {
 			return fmt.Errorf("Error creating DB migration Job %w", err)
 		}
-		return nil
+		return err
 	}
 }
 
