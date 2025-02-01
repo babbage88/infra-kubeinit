@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/babbage88/infra-kubeinit/internal/pretty"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -170,7 +171,7 @@ func (k *KubeClient) CreateBatchJob(jobName string, namespace string, imageName 
 					},
 				},
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
+					RestartPolicy: corev1.RestartPolicyOnFailure,
 					Containers: []corev1.Container{
 						{
 							Name:            jobName,
@@ -224,5 +225,97 @@ func (k *KubeClient) CreateBatchJob(jobName string, namespace string, imageName 
 
 	pretty.Printf("Job created successfully %s", job.Name)
 	slog.Info("Job created successfully\n", slog.String("name", job.Name))
+	return nil
+}
+
+func (k *KubeClient) CreateDeployment(namespace string, deploymentName string, replicas *int32, imageName string) error {
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: deploymentName,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "go-infra",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": "go-infra",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:            deploymentName,
+							Image:           imageName,
+							ImagePullPolicy: corev1.PullAlways,
+							Command:         []string{"/app/server"},
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 8993,
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "cf-token-ini",
+									MountPath: "/run/secrets/cf_token.ini",
+									SubPath:   "cf_token.ini",
+								},
+								{
+									Name:      "k3s-env",
+									MountPath: "/app/.env",
+									SubPath:   "k3s.env",
+								},
+							},
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceMemory: resource.MustParse("512Mi"),
+									corev1.ResourceCPU:    resource.MustParse("500m"),
+								},
+								Requests: corev1.ResourceList{
+									corev1.ResourceMemory: resource.MustParse("256Mi"),
+									corev1.ResourceCPU:    resource.MustParse("250m"),
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "cf-token-ini",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: "cf-token-ini",
+								},
+							},
+						},
+						{
+							Name: "k3s-env",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: "k3s-env",
+								},
+							},
+						},
+					},
+					ImagePullSecrets: []corev1.LocalObjectReference{
+						{Name: "ghcr"},
+					},
+				},
+			},
+		},
+	}
+
+	// Apply Deployment
+	deploymentsClient := k.Client.AppsV1().Deployments(namespace)
+	_, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
+	if err != nil {
+		slog.Error("Error creating deployment", slog.String("error", err.Error()))
+		return fmt.Errorf("failed to create deployment: %w", err)
+	}
+
+	slog.Info("Deployment created successfully", slog.String("deploymentName", deploymentName))
 	return nil
 }
