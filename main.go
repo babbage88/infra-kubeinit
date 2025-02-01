@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/babbage88/infra-kubeinit/internal/pretty"
@@ -28,6 +29,7 @@ func getLatestSuccessfulJob(jobsList []batchv1.Job) *batchv1.Job {
 func (k *KubeClient) PrepDeployment() error {
 	// Retrieve all migration jobs
 	jobsList, err := k.GetBatchJobByLabel("default", "workload-type=db-migration")
+	pretty.PrettyPrintK8sJob(jobsList)
 	if err != nil {
 		pretty.PrintErrorf("Encountered Error: %s", err.Error())
 		return fmt.Errorf("Error retrieving batch Jobs %w", err)
@@ -79,7 +81,11 @@ func main() {
 	// Initialize Kubernetes client
 	kubeClient := NewKubeClient()
 	kubeClient.InitializeExternalClient()
-
+	err := kubeClient.PrepDeployment()
+	if err != nil {
+		pretty.PrintErrorf("Error prepping deployment %w", err)
+		slog.Error("Error prepping deployment", slog.String("error", err.Error()))
+	}
 	//// Debug output of job statuses
 	//for _, j := range jobsList.Items {
 	//	fmt.Println()

@@ -199,7 +199,7 @@ func DateTimeSting(t time.Time) string {
 	return dateTimeString
 }
 
-func PrettyPrintK8sJob(jobsList batchv1.JobList) {
+func PrettyPrintK8sJob(jobsList *batchv1.JobList) {
 	// Debug output of job statuses
 	for _, j := range jobsList.Items {
 		fmt.Println()
