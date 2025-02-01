@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/babbage88/infra-kubeinit/internal/pretty"
@@ -27,15 +25,12 @@ func getLatestSuccessfulJob(jobsList []batchv1.Job) *batchv1.Job {
 	return latestJob
 }
 
-func main() {
-	// Initialize Kubernetes client
-	kubeClient := NewKubeClient()
-	kubeClient.InitializeExternalClient()
-
+func (k *KubeClient) PrepDeployment() error {
 	// Retrieve all migration jobs
-	jobsList, err := kubeClient.GetBatchJobByLabel("default", "workload-type=db-migration")
+	jobsList, err := k.GetBatchJobByLabel("default", "workload-type=db-migration")
 	if err != nil {
 		pretty.PrintErrorf("Encountered Error: %s", err.Error())
+		return fmt.Errorf("Error retrieving batch Jobs %w", err)
 	}
 
 	// Find the latest successful job
@@ -45,8 +40,11 @@ func main() {
 		pretty.Print("Creating Migration Job")
 		fmt.Println()
 		ttl := int32(120)
-		kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", &ttl)
-		return
+		err := k.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", &ttl)
+		if err != nil {
+			return fmt.Errorf("Error creating DB migration Job %w", err)
+		}
+		return err
 	}
 
 	// Check if the latest successful job was completed more than 2 minutes ago
@@ -56,29 +54,41 @@ func main() {
 		if timeSinceCompletion > 2*time.Minute {
 			pretty.Print("Last successful job completed more than 2 minutes ago. Creating a new job.")
 			ttl := int32(120)
-			err := kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", &ttl)
+			err := k.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", &ttl)
 			if err != nil {
-				slog.Error("Error creating Migration Job", slog.String("error", err.Error()))
+				return fmt.Errorf("Error creating DB migration Job %w", err)
 			}
+			return nil
 
 		} else {
 			pretty.Print("Last successful job is recent. No need to create a new job.")
+			return nil
 		}
 	} else {
 		pretty.PrintWarning("Job status found, but CompletionTime is nil. Creating a new job.")
 		ttl := int32(120)
-		kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", &ttl)
-	}
-
-	// Debug output of job statuses
-	for _, j := range jobsList.Items {
-		fmt.Println()
-		response, err := json.MarshalIndent(j.Status, "", "  ")
+		k.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", &ttl)
 		if err != nil {
-			pretty.PrintErrorf("Error marshaling response: %s", err.Error())
-			continue
+			return fmt.Errorf("Error creating DB migration Job %w", err)
 		}
-		pretty.Print(string(response))
-		fmt.Println()
+		return nil
 	}
+}
+
+func main() {
+	// Initialize Kubernetes client
+	kubeClient := NewKubeClient()
+	kubeClient.InitializeExternalClient()
+
+	//// Debug output of job statuses
+	//for _, j := range jobsList.Items {
+	//	fmt.Println()
+	//	response, err := json.MarshalIndent(j.Status, "", "  ")
+	//	if err != nil {
+	//		pretty.PrintErrorf("Error marshaling response: %s", err.Error())
+	//		continue
+	//	}
+	//	pretty.Print(string(response))
+	//	fmt.Println()
+	//}
 }
