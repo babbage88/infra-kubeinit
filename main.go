@@ -3,15 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/babbage88/infra-kubeinit/internal/pretty"
 	batchv1 "k8s.io/api/batch/v1"
 )
-
-func int32Ptr(i int32) *int32 {
-	return &i
-}
 
 func getLatestSuccessfulJob(jobsList []batchv1.Job) *batchv1.Job {
 	var latestJob *batchv1.Job
@@ -48,7 +45,7 @@ func main() {
 		pretty.Print("Creating Migration Job")
 		fmt.Println()
 		ttl := int32(120)
-		kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", int32Ptr(ttl))
+		kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", &ttl)
 		return
 	}
 
@@ -59,14 +56,18 @@ func main() {
 		if timeSinceCompletion > 2*time.Minute {
 			pretty.Print("Last successful job completed more than 2 minutes ago. Creating a new job.")
 			ttl := int32(120)
-			kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", int32Ptr(ttl))
+			err := kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", &ttl)
+			if err != nil {
+				slog.Error("Error creating Migration Job", slog.String("error", err.Error()))
+			}
+
 		} else {
 			pretty.Print("Last successful job is recent. No need to create a new job.")
 		}
 	} else {
 		pretty.PrintWarning("Job status found, but CompletionTime is nil. Creating a new job.")
 		ttl := int32(120)
-		kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", int32Ptr(ttl))
+		kubeClient.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.9", "initdb-env", "initdb.env", &ttl)
 	}
 
 	// Debug output of job statuses
