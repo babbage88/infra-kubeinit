@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1util "k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -228,34 +229,34 @@ func (k *KubeClient) CreateBatchJob(jobName string, namespace string, imageName 
 	return nil
 }
 
-func (k *KubeClient) CreateDeployment(namespace string, deploymentName string, replicas *int32, imageName string) error {
+func (k *KubeClient) CreateDeployment(namespace *string, deploymentName *string, replicas *int32, imageName *string, containerPort *int32) error {
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: deploymentName,
+			Name: *deploymentName,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": "go-infra",
+					"app": *deploymentName,
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": "go-infra",
+						"app": *deploymentName,
 					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:            deploymentName,
-							Image:           imageName,
+							Name:            *deploymentName,
+							Image:           *imageName,
 							ImagePullPolicy: corev1.PullAlways,
 							Command:         []string{"/app/server"},
 							Ports: []corev1.ContainerPort{
 								{
-									ContainerPort: 8993,
+									ContainerPort: *containerPort,
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -309,13 +310,50 @@ func (k *KubeClient) CreateDeployment(namespace string, deploymentName string, r
 	}
 
 	// Apply Deployment
-	deploymentsClient := k.Client.AppsV1().Deployments(namespace)
+	deploymentsClient := k.Client.AppsV1().Deployments(*namespace)
 	_, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
 	if err != nil {
 		slog.Error("Error creating deployment", slog.String("error", err.Error()))
 		return fmt.Errorf("failed to create deployment: %w", err)
 	}
 
-	slog.Info("Deployment created successfully", slog.String("deploymentName", deploymentName))
+	slog.Info("Deployment created successfully", slog.String("deploymentName", *deploymentName))
+	return nil
+}
+
+func (k *KubeClient) CreateLoadBalancerService(namespace *string, serviceName *string, targetPort *int32, exposedPort *int32, appLabel *string, allocateNodePort *bool) error {
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      *serviceName,
+			Namespace: *namespace,
+			Labels: map[string]string{
+				"app": *appLabel,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			AllocateLoadBalancerNodePorts: allocateNodePort,
+			Selector: map[string]string{
+				"app": *appLabel,
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "http",
+					Port:       *exposedPort, // Exposed service port
+					TargetPort: metav1util.IntOrString{Type: metav1util.Int, IntVal: *targetPort},
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+			Type: corev1.ServiceTypeLoadBalancer, // Exposes the service externally
+		},
+	}
+
+	// Create the Service
+	servicesClient := k.Client.CoreV1().Services(*namespace)
+	_, err := servicesClient.Create(context.TODO(), service, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create LoadBalancer Service: %w", err)
+	}
+
+	slog.Info("LoadBalancer Service go-infra-service created successfully")
 	return nil
 }
