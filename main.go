@@ -27,7 +27,7 @@ func getLatestSuccessfulJob(jobsList []batchv1.Job) *batchv1.Job {
 	return latestJob
 }
 
-func (k *KubeClient) PrepDeployment() error {
+func (k *KubeClient) PrepDeployment(initDbImage string) error {
 	// Retrieve all migration jobs
 	jobsList, err := k.GetBatchJobByLabel("default", "workload-type=db-migration")
 	pretty.PrettyPrintK8sJob(jobsList)
@@ -43,7 +43,7 @@ func (k *KubeClient) PrepDeployment() error {
 		pretty.Print("Creating Migration Job")
 		fmt.Println()
 		ttl := int32(120)
-		err := k.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.10", "initdb-env", "initdb.env", &ttl)
+		err := k.CreateBatchJob("init-db", "default", initDbImage, "initdb-env", "initdb.env", &ttl)
 		if err != nil {
 			return fmt.Errorf("Error creating DB migration Job %w", err)
 		}
@@ -57,7 +57,7 @@ func (k *KubeClient) PrepDeployment() error {
 		if timeSinceCompletion > 2*time.Minute {
 			pretty.Print("Last successful job completed more than 2 minutes ago. Creating a new job.")
 			ttl := int32(120)
-			err := k.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.10", "initdb-env", "initdb.env", &ttl)
+			err := k.CreateBatchJob("init-db", "default", initDbImage, "initdb-env", "initdb.env", &ttl)
 			if err != nil {
 				return fmt.Errorf("Error creating DB migration Job %w", err)
 			}
@@ -70,7 +70,7 @@ func (k *KubeClient) PrepDeployment() error {
 	} else {
 		pretty.PrintWarning("Job status found, but CompletionTime is nil. Creating a new job.")
 		ttl := int32(120)
-		err := k.CreateBatchJob("init-db", "default", "ghcr.io/babbage88/init-infradb:v1.0.10", "initdb-env", "initdb.env", &ttl)
+		err := k.CreateBatchJob("init-db", "default", initDbImage, "initdb-env", "initdb.env", &ttl)
 		if err != nil {
 			return fmt.Errorf("error creating DB migration Job %w", err)
 		}
@@ -93,6 +93,7 @@ func main() {
 	deploymentName := flag.String("deployment-name", "go-infra", "deploymenyt name")
 	serviceName := flag.String("service-name", "go-infra-svc", "Service Name")
 	replicas := flag.Int("replicas", 3, "Number of replicas in deployment")
+	dbMigrationImageName := flag.String("dbinit-image-name", "ghcr.io/babbage88/init-infradb:v1.1.0", "Image name to user for DB Migration init")
 	imageName := flag.String("image-name", "ghcr.io/babbage88/go-infra:v1.1.0", "Image name to user for deployment")
 	allocateNodePort := flag.Bool("allocate-nodeport", false, "Allocate NodePort for LoadBalancer deployment")
 	deployService := flag.Bool("deploy-service", true, "Deploy LoadBalancer service")
@@ -101,7 +102,7 @@ func main() {
 	// Initialize Kubernetes client
 	kubeClient := NewKubeClient()
 	kubeClient.InitializeExternalClient()
-	err := kubeClient.PrepDeployment()
+	err := kubeClient.PrepDeployment(*dbMigrationImageName)
 	if err != nil {
 		pretty.PrintErrorf("Error prepping deployment %w", err)
 		slog.Error("Error prepping deployment", slog.String("error", err.Error()))
