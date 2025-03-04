@@ -93,7 +93,7 @@ func main() {
 	deploymentName := flag.String("deployment-name", "go-infra", "deploymenyt name")
 	serviceName := flag.String("service-name", "go-infra-svc", "Service Name")
 	replicas := flag.Int("replicas", 3, "Number of replicas in deployment")
-	imageName := flag.String("image-name", "ghcr.io/babbage88/go-infra:v1.0.10", "Image name to user for deployment")
+	imageName := flag.String("image-name", "ghcr.io/babbage88/go-infra:v1.1.0", "Image name to user for deployment")
 	allocateNodePort := flag.Bool("allocate-nodeport", false, "Allocate NodePort for LoadBalancer deployment")
 	deployService := flag.Bool("deploy-service", true, "Deploy LoadBalancer service")
 	flag.Parse()
