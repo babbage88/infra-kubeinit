@@ -12,6 +12,8 @@ infradb-deployfile:=deployment/kubernetes/infra-db.yaml
 tag:=$(shell git rev-parse HEAD) 
 MAIN_BRANCH:=master
 VERSION_TYPE:=patch
+export LATEST_TAG := $(shell git fetch --tags && git tag -l "v[0-9]*.[0-9]*.[0-9]*" | sort -V | tail -n 1)
+
 
 check-builder:
 	@if ! docker buildx inspect $(KUBE_INIT_BUILDER) > /dev/null 2>&1; then \
