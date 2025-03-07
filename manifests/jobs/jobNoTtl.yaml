@@ -14,7 +14,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: init-infradb
-          image: ghcr.io/babbage88/init-infradb:v1.0.9
+          image: ghcr.io/babbage88/init-infradb:v1.1.0
           imagePullPolicy: Always
           command: ["/app/migrate"]
           volumeMounts:

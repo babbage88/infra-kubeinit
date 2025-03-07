@@ -359,8 +359,21 @@ func (k *KubeClient) CreateLoadBalancerService(namespace *string, serviceName *s
 	return nil
 }
 
-func (k *KubeClient) CreateOrUpdateDeployment(namespace, deploymentName *string, replicas *int32, imageName *string, containerPort *int32) error {
+/*
+func (k *KubeClient) checkServiceExists(namespace string, serviceName string) (bool, error) {
+	service, err := k.Client.AppsV1().Services(namespace).Get(context.Background(), *&serviceName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		slog.Error("error performing get for service", slog.String("error", err.Error()), slog.String("serviceName", serviceName))
+		return false, err
+	}
+	return true, nil
+}
+*/
 
+func (k *KubeClient) CreateOrUpdateDeployment(namespace, deploymentName *string, replicas *int32, imageName *string, containerPort *int32) error {
 	// Check if the deployment exists
 	deployment, err := k.Client.AppsV1().Deployments(*namespace).Get(context.Background(), *deploymentName, metav1.GetOptions{})
 	if err != nil {
