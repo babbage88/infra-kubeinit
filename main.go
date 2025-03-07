@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/babbage88/infra-kubeinit/internal/bumper"
 	"github.com/babbage88/infra-kubeinit/internal/pretty"
 	batchv1 "k8s.io/api/batch/v1"
 )
@@ -89,6 +90,9 @@ func IntToInt32(i *int) *int32 {
 
 func main() {
 	containerPort := flag.Int("container-port", 8993, "Container port")
+	runBumper := flag.Bool("bumper", false, "Used to calculate next release version number")
+	bumpType := flag.String("increment-type", "patch", "major, minor, patch")
+	currentVersion := flag.String("latest-version", "", "Version number to increment eg: v1.1.0")
 	namespace := flag.String("namespace", "default", "Namespace for deployment")
 	deploymentName := flag.String("deployment-name", "go-infra", "deploymenyt name")
 	serviceName := flag.String("service-name", "go-infra-svc", "Service Name")
@@ -98,6 +102,11 @@ func main() {
 	allocateNodePort := flag.Bool("allocate-nodeport", false, "Allocate NodePort for LoadBalancer deployment")
 	deployService := flag.Bool("deploy-service", true, "Deploy LoadBalancer service")
 	flag.Parse()
+
+	if *runBumper {
+		bumper.BumpVersion(*currentVersion, *bumpType)
+		return
+	}
 
 	// Initialize Kubernetes client
 	kubeClient := NewKubeClient()
