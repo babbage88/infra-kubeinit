@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1util "k8s.io/apimachinery/pkg/util/intstr"
@@ -356,4 +357,42 @@ func (k *KubeClient) CreateLoadBalancerService(namespace *string, serviceName *s
 
 	slog.Info("LoadBalancer Service go-infra-service created successfully")
 	return nil
+}
+
+func (k *KubeClient) CreateOrUpdateDeployment(namespace, deploymentName *string, replicas *int32, imageName *string, containerPort *int32) error {
+
+	// Check if the deployment exists
+	deployment, err := k.Client.AppsV1().Deployments(*namespace).Get(context.Background(), *deploymentName, metav1.GetOptions{})
+	if err != nil {
+		// If error is not a 404, log it
+		if apierrors.IsNotFound(err) {
+			slog.Info("Deployment does not exist in namespace", slog.String("deploymentName", *deploymentName), slog.String("namespace", *namespace))
+			err := k.CreateDeployment(namespace, deploymentName, replicas, imageName, containerPort)
+			if err != nil {
+				slog.Error("error creating deployment", slog.String("deploymentName", *deploymentName), slog.String("error", err.Error()))
+				return err
+			}
+			return err
+		} else {
+			deployment.Spec.Template.Spec.Containers[0].Image = *imageName
+			deployment.Spec.Replicas = replicas
+			deployment.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{{ContainerPort: *containerPort}}
+			// Trigger rollout restart by updating an annotation
+			if deployment.Spec.Template.ObjectMeta.Annotations == nil {
+				deployment.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+			}
+			deployment.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+			_, err := k.Client.AppsV1().Deployments(deployment.Namespace).Update(context.TODO(), deployment, metav1.UpdateOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to update deployment: %w", err)
+			}
+
+			slog.Info("Deployment updated successfully", slog.String("deploymentName", deployment.Name))
+
+		}
+	}
+
+	// If the deployment exists, update it to trigger a restart
+	return err
 }

@@ -107,7 +107,7 @@ func main() {
 		pretty.PrintErrorf("Error prepping deployment %w", err)
 		slog.Error("Error prepping deployment", slog.String("error", err.Error()))
 	}
-	err = kubeClient.CreateDeployment(namespace, deploymentName, IntToInt32(replicas), imageName, IntToInt32(containerPort))
+	err = kubeClient.CreateOrUpdateDeployment(namespace, deploymentName, IntToInt32(replicas), imageName, IntToInt32(containerPort))
 	if err != nil {
 		slog.Error("Error Creating Deplyment", slog.String("error", err.Error()))
 	}
