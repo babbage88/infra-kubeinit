@@ -10,6 +10,8 @@ DB_IMG:=ghcr.io/babbage88/init-infradb:
 curdir:=$(shell pwd)
 infradb-deployfile:=deployment/kubernetes/infra-db.yaml
 tag:=$(shell git rev-parse HEAD) 
+MAIN_BRANCH:=master
+VERSION_TYPE:=patch
 
 check-builder:
 	@if ! docker buildx inspect $(KUBE_INIT_BUILDER) > /dev/null 2>&1; then \
