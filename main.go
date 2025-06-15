@@ -9,6 +9,12 @@ import (
 	"github.com/babbage88/infra-kubeinit/internal/bumper"
 	"github.com/babbage88/infra-kubeinit/internal/pretty"
 	batchv1 "k8s.io/api/batch/v1"
+	"k8s.io/client-go/util/homedir"
+)
+
+var (
+	kubeConfigPath string
+	home           string = homedir.HomeDir()
 )
 
 func getLatestSuccessfulJob(jobsList []batchv1.Job) *batchv1.Job {
@@ -34,7 +40,7 @@ func (k *KubeClient) PrepDeployment(initDbImage string) error {
 	pretty.PrettyPrintK8sJob(jobsList)
 	if err != nil {
 		pretty.PrintErrorf("Encountered Error: %s", err.Error())
-		return fmt.Errorf("Error retrieving batch Jobs %w", err)
+		return fmt.Errorf("error retrieving batch jobs %w", err)
 	}
 
 	// Find the latest successful job
@@ -46,7 +52,7 @@ func (k *KubeClient) PrepDeployment(initDbImage string) error {
 		ttl := int32(120)
 		err := k.CreateBatchJob("init-db", "default", initDbImage, "initdb-env", "initdb.env", &ttl)
 		if err != nil {
-			return fmt.Errorf("Error creating DB migration Job %w", err)
+			return fmt.Errorf("error creating database migration Job %w", err)
 		}
 		return err
 	}
@@ -60,7 +66,7 @@ func (k *KubeClient) PrepDeployment(initDbImage string) error {
 			ttl := int32(120)
 			err := k.CreateBatchJob("init-db", "default", initDbImage, "initdb-env", "initdb.env", &ttl)
 			if err != nil {
-				return fmt.Errorf("Error creating DB migration Job %w", err)
+				return fmt.Errorf("error creating database migration job %w", err)
 			}
 			return err
 
@@ -73,7 +79,7 @@ func (k *KubeClient) PrepDeployment(initDbImage string) error {
 		ttl := int32(120)
 		err := k.CreateBatchJob("init-db", "default", initDbImage, "initdb-env", "initdb.env", &ttl)
 		if err != nil {
-			return fmt.Errorf("error creating DB migration Job %w", err)
+			return fmt.Errorf("error creating database migration job %w", err)
 		}
 		return err
 	}
@@ -89,18 +95,19 @@ func IntToInt32(i *int) *int32 {
 }
 
 func main() {
+	flag.StringVar(&kubeConfigPath, "kubeconfig", fmt.Sprintf("%s/.kube/config", home), "kubeconfig file to use")
 	containerPort := flag.Int("container-port", 8993, "Container port")
 	runBumper := flag.Bool("bumper", false, "Used to calculate next release version number")
 	bumpType := flag.String("increment-type", "patch", "major, minor, patch")
-	currentVersion := flag.String("latest-version", "", "Version number to increment eg: v1.1.3")
+	currentVersion := flag.String("latest-version", "", "Version number to increment eg: v1.2.2")
 	namespace := flag.String("namespace", "default", "Namespace for deployment")
 	deploymentName := flag.String("deployment-name", "go-infra", "deploymenyt name")
 	serviceName := flag.String("service-name", "go-infra-svc", "Service Name")
 	replicas := flag.Int("replicas", 3, "Number of replicas in deployment")
-	dbMigrationImageName := flag.String("dbinit-image-name", "ghcr.io/babbage88/init-infradb:v1.1.3", "Image name to user for DB Migration init")
-	imageName := flag.String("image-name", "ghcr.io/babbage88/go-infra:v1.1.0", "Image name to user for deployment")
+	dbMigrationImageName := flag.String("dbinit-image-name", "ghcr.io/babbage88/init-infradb:v1.2.2", "Image name to user for DB Migration init")
+	imageName := flag.String("image-name", "ghcr.io/babbage88/go-infra:v1.2.2", "Image name to user for deployment")
 	allocateNodePort := flag.Bool("allocate-nodeport", false, "Allocate NodePort for LoadBalancer deployment")
-	deployService := flag.Bool("deploy-service", true, "Deploy LoadBalancer service")
+	deployService := flag.Bool("deploy-service", false, "Deploy LoadBalancer service")
 	flag.Parse()
 
 	if *runBumper {
@@ -109,20 +116,22 @@ func main() {
 	}
 
 	// Initialize Kubernetes client
-	kubeClient := NewKubeClient()
+	kubeClient := NewKubeClient(WithKubeconfigPath(kubeConfigPath))
 	kubeClient.InitializeExternalClient()
 	err := kubeClient.PrepDeployment(*dbMigrationImageName)
 	if err != nil {
-		pretty.PrintErrorf("Error prepping deployment %w", err)
+		pretty.PrintErrorf("Error prepping deployment error: %s", err.Error())
 		slog.Error("Error prepping deployment", slog.String("error", err.Error()))
 	}
-	err = kubeClient.CreateOrUpdateDeployment(namespace, deploymentName, IntToInt32(replicas), imageName, IntToInt32(containerPort))
-	if err != nil {
-		slog.Error("Error Creating Deplyment", slog.String("error", err.Error()))
-	}
-	pretty.Print("deployment created")
 
 	if *deployService {
+		pretty.Print("Creating or Updating deployment...")
+		err = kubeClient.CreateOrUpdateDeployment(namespace, deploymentName, IntToInt32(replicas), imageName, IntToInt32(containerPort))
+		if err != nil {
+			slog.Error("Error Creating Deplyment", slog.String("error", err.Error()))
+		}
+		pretty.Print("deployment created")
+
 		err = kubeClient.CreateLoadBalancerService(namespace, serviceName, IntToInt32(containerPort), IntToInt32(containerPort), deploymentName, allocateNodePort)
 		if err != nil {
 			slog.Error("error creating service", slog.String("error", err.Error()))
